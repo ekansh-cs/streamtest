@@ -1,15 +1,10 @@
 import streamlit as st
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
-
-class VideoTransformer(VideoTransformerBase):
-    def transform(self, frame):
-        # Convert frame to numpy array and return without modification
-        return frame.to_ndarray(format="bgr24")
+from streamlit_webrtc import webrtc_streamer
 
 st.title("Webcam Stream")
 
-# Stream webcam using WebRTC
-webrtc_streamer(key="video-stream", video_transformer_factory=VideoTransformer)
+# Stream webcam without processing
+webrtc_streamer(key="video-stream")
 
 st.markdown("---")
 st.info("Instructions:\n1. Allow camera access\n2. The webcam feed will be displayed")
