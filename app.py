@@ -1,38 +1,67 @@
-import streamlit as st
 import cv2
-import numpy as np
 import mediapipe as mp
-from streamlit_webrtc import webrtc_streamer, VideoTransformerBase
+import numpy as np
+import streamlit as st
+import math
+from PIL import Image
+
+# Initialize Streamlit
+st.title("Hand Tracking with Streamlit Camera Feed 📷🖐")
 
 # Initialize MediaPipe Hands
 mp_hands = mp.solutions.hands
-mp_drawing = mp.solutions.drawing_utils
+hands = mp_hands.Hands(
+    static_image_mode=False,
+    max_num_hands=1,
+    min_detection_confidence=0.6,
+    min_tracking_confidence=0.8
+)
 
-class HandTrackingTransformer(VideoTransformerBase):
-    def __init__(self):
-        self.hands = mp_hands.Hands(min_detection_confidence=0.7, min_tracking_confidence=0.7)
-    
-    def transform(self, frame):
-        # Convert frame to RGB
-        img = frame.to_ndarray(format="bgr24")
-        rgb_frame = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-        results = self.hands.process(rgb_frame)
+# Define colors for overlay
+RED = (0, 0, 255)
+GREEN = (0, 255, 0)
 
-        if results.multi_hand_landmarks:
-            for hand_landmarks in results.multi_hand_landmarks:
-                # Draw hand landmarks on the image
-                mp_drawing.draw_landmarks(
-                    img, hand_landmarks, mp_hands.HAND_CONNECTIONS,
-                    mp_drawing.DrawingSpec(color=(0, 255, 0), thickness=2, circle_radius=2),
-                    mp_drawing.DrawingSpec(color=(0, 0, 255), thickness=2)
-                )
-        
-        return img
+# Sidebar layout for buttons
+st.sidebar.title("Controls")
+run = st.sidebar.checkbox("Start Camera", value=True)
 
-st.title("Hand Tracking with Streamlit WebRTC")
+# Streamlit camera input
+frame_window = st.empty()
+camera_feed = st.camera_input("Take a picture or use live feed")
 
-# Start WebRTC stream with Hand Tracking
-webrtc_streamer(key="hand-tracking", video_transformer_factory=HandTrackingTransformer)
+def process_frame(image):
+    """Process frame for hand tracking using OpenCV and MediaPipe."""
+    # Convert to OpenCV format
+    image = np.array(image)
+    image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
-st.markdown("---")
-st.info("Instructions:\n1. Allow camera access\n2. Show your hand to the camera\n3. Your hand will be tracked in real-time.")
+    # Process with MediaPipe
+    results = hands.process(cv2.cvtColor(image, cv2.COLOR_BGR2RGB))
+
+    if results.multi_hand_landmarks:
+        for hand_landmarks in results.multi_hand_landmarks:
+            index_tip = hand_landmarks.landmark[8]
+            thumb_tip = hand_landmarks.landmark[4]
+
+            h, w, _ = image.shape
+            ix, iy = int(index_tip.x * w), int(index_tip.y * h)
+            tx, ty = int(thumb_tip.x * w), int(thumb_tip.y * h)
+
+            # Draw hand landmarks
+            cv2.circle(image, (ix, iy), 10, GREEN, cv2.FILLED)
+            cv2.circle(image, (tx, ty), 10, GREEN, cv2.FILLED)
+            cv2.line(image, (ix, iy), (tx, ty), GREEN, 5)
+
+    return image
+
+# Main loop for processing the camera feed
+if run and camera_feed is not None:
+    # Convert Streamlit image to OpenCV
+    image = Image.open(camera_feed)
+    processed_image = process_frame(image)
+
+    # Convert back to RGB for Streamlit display
+    processed_image = cv2.cvtColor(processed_image, cv2.COLOR_BGR2RGB)
+
+    # Display processed frame in Streamlit
+    frame_window.image(processed_image, use_column_width=True)
